@@ -122,4 +122,3 @@ button02 = cmds.button("MyBtn02ID", label="Cancel", parent=button_layout, comman
 cmds.formLayout(button_layout, e=1, attachPosition = [ (button01, 'left', 4, 0), (button01, 'right', 2, 50), (button02, 'left', 2, 50), (button02, 'right', 4, 100) ])
 
 cmds.showWindow("MyWindow")
-
