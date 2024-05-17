@@ -151,7 +151,6 @@ class MyWindow(QtWidgets.QDialog):
         # Установим начальное положение объекта по оси X в соответствии со значением слайдера
         cmds.setAttr("{}.translateX".format(self.poly_object), self.slider.value())
 
-        
 if cmds.window("MyTestUI", query=True, exists=True):
     cmds.deleteUI("MyTestUI")
 
