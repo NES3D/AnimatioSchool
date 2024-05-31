@@ -2,11 +2,17 @@ import maya.cmds as cmds
 from PySide2 import QtWidgets, QtCore, QtGui
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
+class MyMIME(QtCore.QMimeData):
+  def __init__(self, widget):
+    super(MyMIME,  self).__init__()
+    self.widget = widget
+
 class SelectWidget(QtWidgets.QWidget):
     def __init__(self, set_name):
         super(SelectWidget, self).__init__()
 
         self.set_name = set_name
+        self.offset = QtCore.QPoint()
         
         self.popMenu = None
 
@@ -52,6 +58,10 @@ class SelectWidget(QtWidgets.QWidget):
         self.set_background()
 
     def mousePressEvent(self, event):
+
+        if event.buttons() == QtCore.Qt.LeftButton:
+            self.offset = event.pos()
+
         if event.buttons() == QtCore.Qt.LeftButton:
             # Выделение объектов в selection set
             cmds.select(self.set_name)
@@ -62,6 +72,22 @@ class SelectWidget(QtWidgets.QWidget):
 
             self.create_contex_menu()
             self.popMenu.exec_(self.mapToGlobal(event.pos()))
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() != QtCore.Qt.LeftButton:
+            return
+        mimeData = MyMIME(self)
+        mimeData.setText(self.label.text())
+        self.pixmap = self.grab()
+        painter = QtGui.QPainter(self.pixmap)
+        painter.setCompositionMode(painter.CompositionMode_DestinationIn)
+        painter.fillRect(self.pixmap.rect(), QtGui.QColor(80, 80, 80, 127))
+        painter.end()
+        drag = QtGui.QDrag(self)
+        drag.setMimeData(mimeData)
+        drag.setPixmap(self.pixmap)
+        drag.setHotSpot(event.pos())
+        drag.exec_(QtCore.Qt.MoveAction)
 
     def mouseReleaseEvent(self, event):
         self.set_background(75,75,75)
@@ -111,13 +137,15 @@ class SelectWidget(QtWidgets.QWidget):
     def deleteSet(self):
         cmds.delete(self.set_name)
         self.deleteLater()
- 
+
 
 class MyCustomWidget(QtWidgets.QDialog):
     def __init__(self):
         super(MyCustomWidget, self).__init__()
 
         self.setup_ui()
+        self.populate_with_existing_sets()
+        self.setAcceptDrops(True) # this is important - we can now drop widgets here
 
     def setup_ui(self):
         self.setWindowTitle("Selection Sets")
@@ -166,6 +194,7 @@ class MyCustomWidget(QtWidgets.QDialog):
         self.btn_hor_layout_02.setSpacing(3)
         self.main_layout.addLayout(self.btn_hor_layout_02)
 
+        #Create Buttons
         self.select_all_btn = QtWidgets.QPushButton("Select All")
         self.select_all_btn.setMinimumHeight(50)
         self.select_all_btn.setMaximumHeight(50)
@@ -206,9 +235,17 @@ class MyCustomWidget(QtWidgets.QDialog):
         self.selection_widget = SelectWidget(self.set_name)
         self.widgets_layout.insertWidget(self.widgets_layout.count() - 1, self.selection_widget)
 
+    # Синхронизация с сущетсвующими selection sets
+    def populate_with_existing_sets(self):
+        existing_sets = cmds.ls(type='objectSet')
+        for set_name in existing_sets:
+            if set_name not in ['defaultLightSet', 'defaultObjectSet', 'initialParticleSE','initialShadingGroup']:  # Исключаем defaultLightSet и defaultObjectSet
+                self.selection_widget = SelectWidget(set_name)
+                self.widgets_layout.insertWidget(self.widgets_layout.count() - 1, self.selection_widget)
+
     def select_all(self):
-        # Выделение всех полигональных объектов в сцене
-        cmds.select(cmds.ls())
+        # Выделение всех объектов в сцене
+        cmds.select(cmds.ls(type=['mesh', 'nurbsCurve', 'joint']))
 
     def select_all_geo(self):
         # Выделение всех полигональных объектов в сцене
@@ -227,6 +264,27 @@ class MyCustomWidget(QtWidgets.QDialog):
             if isinstance(child, SelectWidget):
                 cmds.delete(child.set_name)
                 child.deleteLater()
+
+    def dragEnterEvent(self, e):
+        e.acceptProposedAction() # accept dragEnter action
+
+    def dragMoveEvent(self, e):
+        e.acceptProposedAction()
+
+    def dropEvent(self, e):
+        mimeData = e.mimeData()
+        widget = mimeData.widget
+        self.widgets_layout.removeWidget(widget)
+        widget.setParent(self.scroll_widget)
+        drop_position = e.pos()
+        for i in range(self.widgets_layout.count() - 1):
+            item = self.widgets_layout.itemAt(i).widget()
+            if item and item.geometry().contains(drop_position):
+                self.widgets_layout.insertWidget(i, widget)
+                break
+        else:
+            self.widgets_layout.insertWidget(self.widgets_layout.count() - 1, widget)
+        widget.show()
 
 def main():
 
